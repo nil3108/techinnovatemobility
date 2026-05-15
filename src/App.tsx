@@ -353,7 +353,7 @@ export default function App() {
           
           {/* Logo */}
           <div className="flex items-center cursor-pointer" onClick={() => setPortal('welcome')}>
-            <img src="/superapp/logo.png" alt="Brand Logo" className="h-10 object-contain" />
+            <img src="/techinnovatemobility/logo.png" alt="Brand Logo" className="h-10 object-contain" />
           </div>
 
           {/* Active Portal Pill Indicator */}
@@ -489,7 +489,7 @@ export default function App() {
                 
                 {/* Logo from Reference */}
                 <div className="flex justify-center mb-8">
-                  <img src="/superapp/logo.png" alt="Brand Logo" className="h-28 object-contain" />
+                  <img src="/techinnovatemobility/logo.png" alt="Brand Logo" className="h-28 object-contain" />
                 </div>
 
                 <h2 className="text-3xl font-bold tracking-tight text-slate-900 mb-2">
@@ -573,7 +573,7 @@ export default function App() {
                <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-md mx-auto w-full shadow-sm">
                   <div className="flex justify-center mb-6">
                     <div className="flex justify-center">
-                      <img src="/superapp/logo.png" alt="Brand Logo" className="h-20 object-contain" />
+                      <img src="/techinnovatemobility/logo.png" alt="Brand Logo" className="h-20 object-contain" />
                     </div>
                   </div>
 
@@ -620,7 +620,7 @@ export default function App() {
                <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-md mx-auto w-full shadow-sm">
                   <div className="flex justify-center mb-6">
                     <div className="flex justify-center">
-                      <img src="/superapp/logo.png" alt="Brand Logo" className="h-20 object-contain" />
+                      <img src="/techinnovatemobility/logo.png" alt="Brand Logo" className="h-20 object-contain" />
                     </div>
                   </div>
 
@@ -675,7 +675,7 @@ export default function App() {
                <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-md mx-auto w-full shadow-sm">
                   <div className="flex justify-center mb-6">
                     <div className="flex justify-center">
-                      <img src="/superapp/logo.png" alt="Brand Logo" className="h-20 object-contain" />
+                      <img src="/techinnovatemobility/logo.png" alt="Brand Logo" className="h-20 object-contain" />
                     </div>
                   </div>
 

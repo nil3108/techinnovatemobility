@@ -2,18 +2,18 @@
   "name": "CNG Fuel Tracker",
   "short_name": "CNG Tracker",
   "description": "Advanced CNG Fleet Fuel Monitoring & Compliance Platform",
-  "start_url": "/superapp/",
+  "start_url": "/techinnovatemobility/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#EE2726",
   "icons": [
     {
-      "src": "/superapp/icons/icon-192.png",
+      "src": "/techinnovatemobility/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/superapp/icons/icon-512.png",
+      "src": "/techinnovatemobility/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }

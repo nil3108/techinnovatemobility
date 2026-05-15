@@ -5,7 +5,7 @@ import App from "./App";
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/superapp/sw.js");
+    navigator.serviceWorker.register("/techinnovatemobility/sw.js");
   });
 }
 
