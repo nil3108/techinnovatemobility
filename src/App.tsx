@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Fuel,
   User,
@@ -56,7 +56,267 @@ export default function App() {
   const [driverError, setDriverError] = useState('');
   const [loggedInDriver, setLoggedInDriver] = useState<Driver | null>(null);
   
-  // Comprehensive logout handler - resets ALL portal states
+  // Owner Auth States
+  const [ownerEmail, setOwnerEmail] = useState('');
+  const [ownerPassword, setOwnerPassword] = useState('');
+  const [ownerError, setOwnerError] = useState('');
+  const [isOwnerLoggedIn, setIsOwnerLoggedIn] = useState(false);
+  const [ownerTab, setOwnerTab] = useState<'home' | 'vehicles' | 'media' | 'alerts'>('home');
+
+  // Admin Auth States
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminError, setAdminError] = useState('');
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+
+  // Wizard States
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [wizardVehicleId, setWizardVehicleId] = useState('');
+  const [wizardKgs, setWizardKgs] = useState('');
+  const [wizardRate, setWizardRate] = useState('');
+  const [wizardStation, setWizardStation] = useState('Vadodara Gas Limited');
+
+  // Video Recording States
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSecs, setRecordingSecs] = useState(0);
+  const [videoRecorded, setVideoRecorded] = useState(false);
+  const [videoPreviewMode, setVideoPreviewMode] = useState(false);
+  const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
+  const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
+  const [videoDataUrl, setVideoDataUrl] = useState('');
+
+  // Camera Capture States
+  const [pumpCaptured, setPumpCaptured] = useState(false);
+  const [pumpPhotoData, setPumpPhotoData] = useState('');
+  const [pumpStream, setPumpStream] = useState<MediaStream | null>(null);
+  const [receiptCaptured, setReceiptCaptured] = useState(false);
+  const [receiptPhotoData, setReceiptPhotoData] = useState('');
+  const [receiptStream, setReceiptStream] = useState<MediaStream | null>(null);
+  const [odoCaptured, setOdoCaptured] = useState(false);
+  const [odoPhotoData, setOdoPhotoData] = useState('');
+  const [odoStream, setOdoStream] = useState<MediaStream | null>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+
+  // Location States
+  const [receiptLocation, setReceiptLocation] = useState({ lat: 0, lng: 0 });
+  const [receiptLocationPreset, setReceiptLocationPreset] = useState<'valid' | 'invalid'>('valid');
+  const [odoLocation, setOdoLocation] = useState({ lat: 0, lng: 0 });
+
+  // OCR & Simulation States
+  const [odoOcrProcessing, setOdoOcrProcessing] = useState(false);
+  const [odoDetectedKms, setOdoDetectedKms] = useState('');
+  const [simulateOdoOffset, setSimulateOdoOffset] = useState(false);
+  const [simulateFuelDrop, setSimulateFuelDrop] = useState(false);
+
+  // Form States
+  const [newDriverName, setNewDriverName] = useState('');
+  const [newDriverCode, setNewDriverCode] = useState('');
+  const [newVehiclePlate, setNewVehiclePlate] = useState('');
+  const [newVehicleModel, setNewVehicleModel] = useState('');
+  const [newVehicleInitialOdo, setNewVehicleInitialOdo] = useState('');
+  const [newVehicleCapacity, setNewVehicleCapacity] = useState('8');
+
+  // UI States
+  const [successMsg, setSuccessMsg] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+
+  // Refs
+  const videoPreviewRef = useRef<HTMLVideoElement>(null);
+  const pumpPreviewRef = useRef<HTMLVideoElement>(null);
+  const receiptPreviewRef = useRef<HTMLVideoElement>(null);
+  const odoPreviewRef = useRef<HTMLVideoElement>(null);
+
+  // Translations
+  const t = translations[lang];
+
+  // Recorder instance
+  const recorderInstance = new VideoRecorder();
+
+  // Load all data function
+  const loadAllData = async () => {
+    setIsLoading(true);
+    try {
+      const data = await loadSavedData();
+      setVehicles(data.vehicles);
+      setDrivers(data.drivers);
+      setFills(data.fills);
+      setLogs(data.logs);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    }
+    setIsLoading(false);
+  };
+
+  // Load data on mount
+  useEffect(() => {
+    loadAllData();
+  }, []);
+
+  // Login Handlers
+  const handleDriverLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const driver = drivers.find(d => d.code === driverCodeInput.toUpperCase());
+    if (driver) {
+      setLoggedInDriver(driver);
+      setPortal('driver');
+      setDriverError('');
+    } else {
+      setDriverError('Invalid driver code. Please try again.');
+    }
+  };
+
+  const handleOwnerLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (ownerEmail === 'admin@techinnovatemobility.com' && ownerPassword === 'admin123') {
+      setIsOwnerLoggedIn(true);
+      setPortal('owner');
+      setOwnerError('');
+    } else {
+      setOwnerError('Invalid credentials. Try admin@techinnovatemobility.com / admin123');
+    }
+  };
+
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminEmail === 'admin@techinnovatemobility.com' && adminPassword === 'admin123') {
+      setIsAdminLoggedIn(true);
+      setPortal('admin');
+      setAdminError('');
+    } else {
+      setAdminError('Invalid credentials. Try admin@techinnovatemobility.com / admin123');
+    }
+  };
+
+  // Driver Management
+  const handleAddDriver = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newDriver: Driver = {
+      id: `DRV-${Date.now()}`,
+      name: newDriverName,
+      code: newDriverCode.toUpperCase(),
+      status: 'Active'
+    };
+    const updatedDrivers = [...drivers, newDriver];
+    setDrivers(updatedDrivers);
+    saveAllData(updatedDrivers, drivers, fills, logs);
+    setNewDriverName('');
+    setNewDriverCode('');
+    setSuccessMsg('Driver registered successfully!');
+    setTimeout(() => setSuccessMsg(''), 3000);
+  };
+
+  const handleDeleteDriver = (id: string) => {
+    const updatedDrivers = drivers.filter(d => d.id !== id);
+    setDrivers(updatedDrivers);
+    saveAllData(updatedDrivers, drivers, fills, logs);
+  };
+
+  // Vehicle Management
+  const handleAddVehicle = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newVehicle: Vehicle = {
+      id: `VEH-${Date.now()}`,
+      plateNumber: newVehiclePlate.toUpperCase(),
+      model: newVehicleModel,
+      initialOdo: parseInt(newVehicleInitialOdo) || 0,
+      currentOdo: parseInt(newVehicleInitialOdo) || 0,
+      fuelCapacity: parseInt(newVehicleCapacity),
+      status: 'Active'
+    };
+    const updatedVehicles = [...vehicles, newVehicle];
+    setVehicles(updatedVehicles);
+    saveAllData(updatedVehicles, drivers, fills, logs);
+    setNewVehiclePlate('');
+    setNewVehicleModel('');
+    setNewVehicleInitialOdo('');
+    setNewVehicleCapacity('8');
+    setSuccessMsg('Vehicle registered successfully!');
+    setTimeout(() => setSuccessMsg(''), 3000);
+  };
+
+  const handleDeleteVehicle = (id: string) => {
+    const updatedVehicles = vehicles.filter(v => v.id !== id);
+    setVehicles(updatedVehicles);
+    saveAllData(updatedVehicles, drivers, fills, logs);
+  };
+
+  // Wizard Submit
+  const handleWizardSubmit = async () => {
+    if (!wizardVehicleId) {
+      alert('Please select a vehicle!');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const driver = loggedInDriver;
+      const vehicle = vehicles.find(v => v.id === wizardVehicleId);
+
+      let distanceDifferenceMeters = 0;
+      if (simulateOdoOffset) {
+        distanceDifferenceMeters = 2800;
+      } else {
+        distanceDifferenceMeters = calculateDistanceInMeters(
+          receiptLocation.lat, receiptLocation.lng,
+          odoLocation.lat, odoLocation.lng
+        );
+      }
+
+      const newFill: CngFill = {
+        id: `FILL-${Date.now()}`,
+        driverId: driver?.id || '',
+        driverName: driver?.name || '',
+        vehicleId: wizardVehicleId,
+        vehiclePlate: vehicle?.plateNumber || '',
+        station: wizardStation,
+        kgsFilled: parseFloat(wizardKgs) || 0,
+        ratePerKg: parseFloat(wizardRate) || 0,
+        totalAmount: currentTotalPayable,
+        odometerValue: parseInt(odoDetectedKms) || 0,
+        timestamp: new Date().toISOString(),
+        videoUrl: videoDataUrl || 'No video',
+        pumpPhotoUrl: pumpPhotoData || 'No photo',
+        receiptPhotoUrl: receiptPhotoData || 'No photo',
+        odometerPhotoUrl: odoPhotoData || 'No photo',
+        receiptGeo: { lat: receiptLocation.lat, lng: receiptLocation.lng, address: 'Auto-captured' },
+        odometerGeo: { lat: odoLocation.lat, lng: odoLocation.lng, address: 'Auto-captured' },
+        isLocationMismatched: distanceDifferenceMeters > 500,
+        distanceDifferenceMeters,
+        isFuelDropAlert: simulateFuelDrop,
+        fuelDropPercentage: simulateFuelDrop ? 22.5 : 0,
+      };
+
+      const updatedFills = [...fills, newFill];
+      setFills(updatedFills);
+      saveAllData(vehicles, drivers, updatedFills, logs);
+
+      setIsWizardOpen(false);
+      setWizardStep(1);
+      setVideoRecorded(false);
+      setVideoPreviewMode(false);
+      setVideoStream(null);
+      setPumpCaptured(false);
+      setReceiptCaptured(false);
+      setOdoCaptured(false);
+      setPumpStream(null);
+      setReceiptStream(null);
+      setOdoStream(null);
+      setSimulateOdoOffset(false);
+      setSimulateFuelDrop(false);
+
+      setSuccessMsg('✅ Fill record saved to Google Sheets! ' + t.fillSubmittedSuccess);
+      setTimeout(() => setSuccessMsg(''), 5000);
+
+    } catch (error) {
+      console.error('Error saving fill:', error);
+      alert('Error saving to Google Sheets. Data saved locally only.');
+    }
+    setIsLoading(false);
+  };
+
+  // Comprehensive logout handler
   const handleLogout = () => {
     setPortal('welcome');
     setIsOwnerLoggedIn(false);
@@ -69,625 +329,16 @@ export default function App() {
     setIsWizardOpen(false);
     setWizardStep(1);
     setVideoRecorded(false);
-    setIsRecording(false);
+    setVideoPreviewMode(false);
+    setVideoStream(null);
     setPumpCaptured(false);
     setReceiptCaptured(false);
     setOdoCaptured(false);
-    setOwnerTab('home');
-  };
-
-  const [ownerEmail, setOwnerEmail] = useState('owner@cng.com');
-  const [ownerPassword, setOwnerPassword] = useState('password');
-  const [ownerError, setOwnerError] = useState('');
-  const [isOwnerLoggedIn, setIsOwnerLoggedIn] = useState(false);
-
-  const [adminEmail, setAdminEmail] = useState('admin@cng.com');
-  const [adminPassword, setAdminPassword] = useState('admin123');
-  const [adminError, setAdminError] = useState('');
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
-
-  // Navigation for Fleet Owner
-  const [ownerTab, setOwnerTab] = useState<'home' | 'vehicles' | 'media' | 'alerts'>('home');
-  
-  // Form Add States
-  const [newDriverName, setNewDriverName] = useState('');
-  const [newDriverCode, setNewDriverCode] = useState('');
-  const [newVehiclePlate, setNewVehiclePlate] = useState('');
-  const [newVehicleModel, setNewVehicleModel] = useState('');
-  const [newVehicleInitialOdo, setNewVehicleInitialOdo] = useState('');
-  const [newVehicleCapacity, setNewVehicleCapacity] = useState('12');
-
-  // Selected vehicle detail modal
-  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
-
-  // Driver Wizard State
-  const [isWizardOpen, setIsWizardOpen] = useState(false);
-  const [wizardStep, setWizardStep] = useState(1);
-  
-  // Step 1 (Video) - Real Camera
-  const [videoRecorded, setVideoRecorded] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingSecs, setRecordingSecs] = useState(0);
-  const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
-  const [videoDataUrl, setVideoDataUrl] = useState<string>('');
-  const [recorderInstance] = useState(() => new VideoRecorder());
-  const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
-  const videoPreviewRef = React.useRef<HTMLVideoElement>(null);
-
-  // Step 2 (Pump photo) - Real Camera
-  const [pumpCaptured, setPumpCaptured] = useState(false);
-  const [pumpPhotoData, setPumpPhotoData] = useState<string>('');
-  const [pumpStream, setPumpStream] = useState<MediaStream | null>(null);
-  const pumpPreviewRef = React.useRef<HTMLVideoElement>(null);
-
-  // Step 3 (Receipt photo & Geotag) - Real Camera + GPS
-  const [receiptCaptured, setReceiptCaptured] = useState(false);
-  const [receiptPhotoData, setReceiptPhotoData] = useState<string>('');
-  const [receiptLocation, setReceiptLocation] = useState<{ lat: number; lng: number }>({ lat: 0, lng: 0 });
-  const [receiptLocationPreset, setReceiptLocationPreset] = useState<'valid' | 'invalid'>('valid');
-
-  // Step 4 (Manual details)
-  const [wizardVehicleId, setWizardVehicleId] = useState('');
-  const [wizardStation, setWizardStation] = useState('Vadodara Gas Limited');
-  const [wizardKgs, setWizardKgs] = useState('8.5');
-  const [wizardRate, setWizardRate] = useState('82.5');
-  
-  // Step 5 (Odometer photo & OCR) - Real Camera + GPS
-  const [odoCaptured, setOdoCaptured] = useState(false);
-  const [odoPhotoData, setOdoPhotoData] = useState<string>('');
-  const [odoOcrProcessing, setOdoOcrProcessing] = useState(false);
-  const [odoDetectedKms, setOdoDetectedKms] = useState('12458');
-  const [simulateOdoOffset, setSimulateOdoOffset] = useState(false);
-  const [simulateFuelDrop, setSimulateFuelDrop] = useState(false);
-  
-  // Odometer camera preview
-  const [odoStream, setOdoStream] = useState<MediaStream | null>(null);
-  const [odoLocation, setOdoLocation] = useState<{ lat: number; lng: number }>({ lat: 0, lng: 0 });
-  const odoPreviewRef = React.useRef<HTMLVideoElement>(null);
-  
-  // Camera states
-  const [cameraError, setCameraError] = useState<string>('');
-  const [isCapturing, setIsCapturing] = useState(false);
-
-  // Messages & Alerts
-  const [successMsg, setSuccessMsg] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-
-  const t = translations[lang];
-
-  // Load data from Google Sheets on mount
-  useEffect(() => {
-    loadAllData();
-  }, []);
-
-  // Load all data from Google Sheets API
-  const loadAllData = async () => {
-    setIsLoading(true);
-    console.log('🔄 Loading data...');
-    
-    try {
-      const { getVehicles, getDrivers, getFills, getAlerts } = await import('./utils/googleSheetsApi');
-      
-      // Fetch all data (tries Google Sheets first, falls back to localStorage)
-      const [vehiclesRes, driversRes, fillsRes, alertsRes] = await Promise.all([
-        getVehicles(),
-        getDrivers(),
-        getFills(),
-        getAlerts()
-      ]);
-
-      console.log('📥 Loaded:', {
-        drivers: driversRes.drivers?.length || 0,
-        vehicles: vehiclesRes.vehicles?.length || 0,
-        fills: fillsRes.fills?.length || 0
-      });
-
-      // Update state with fetched data
-      if (driversRes.success && driversRes.drivers) {
-        setDrivers(driversRes.drivers);
-        localStorage.setItem('cng_drivers', JSON.stringify(driversRes.drivers));
-      }
-      
-      if (vehiclesRes.success && vehiclesRes.vehicles) {
-        setVehicles(vehiclesRes.vehicles);
-        localStorage.setItem('cng_vehicles', JSON.stringify(vehiclesRes.vehicles));
-      }
-      
-      if (fillsRes.success && fillsRes.fills) {
-        setFills(fillsRes.fills);
-        localStorage.setItem('cng_fills', JSON.stringify(fillsRes.fills));
-      }
-      
-      if (alertsRes.success && alertsRes.alerts) {
-        setLogs(alertsRes.alerts);
-        localStorage.setItem('cng_logs', JSON.stringify(alertsRes.alerts));
-      }
-      
-      setSuccessMsg(`✅ Loaded: ${driversRes.drivers?.length || 0} drivers, ${vehiclesRes.vehicles?.length || 0} vehicles`);
-      setTimeout(() => setSuccessMsg(''), 3000);
-      
-    } catch (error) {
-      console.error('❌ Failed to load data:', error);
-      // Use localStorage as fallback
-      const data = loadSavedData();
-      setVehicles(data.vehicles);
-      setDrivers(data.drivers);
-      setFills(data.fills);
-      setLogs(data.logs);
-    }
-    setIsLoading(false);
-  };
-
-  // Save data - sends to Google Sheets AND localStorage as backup
-  const triggerDataSave = async (
-    updatedVehicles: Vehicle[],
-    updatedDrivers: Driver[],
-    updatedFills: CngFill[],
-    updatedLogs: AuditLog[]
-  ) => {
-    // Update local state immediately for instant UI response
-    setVehicles(updatedVehicles);
-    setDrivers(updatedDrivers);
-    setFills(updatedFills);
-    setLogs(updatedLogs);
-    
-    // Save to localStorage as backup
-    saveAllData(updatedVehicles, updatedDrivers, updatedFills, updatedLogs);
-    
-    // Google Sheets saves happen in the individual handlers (addDriver, addVehicle, etc.)
-  };
-
-  // Recording simulated interval (Counts indefinitely, no maximum cap limit, minimum 10s required)
-  useEffect(() => {
-    let interval: any;
-    if (isRecording) {
-      interval = setInterval(() => {
-        setRecordingSecs((prev) => prev + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isRecording]);
-
-  // OCR calculation mock simulation
-  useEffect(() => {
-    if (odoCaptured) {
-      setOdoOcrProcessing(true);
-      const timer = setTimeout(() => {
-        setOdoOcrProcessing(false);
-        // Simulate detecting the current odometer based on SELECTED vehicle
-        const veh = vehicles.find(v => v.id === wizardVehicleId) || vehicles[0];
-        const nextOdo = veh ? veh.currentOdo + Math.round(Number(wizardKgs) * 20) : 15240;
-        setOdoDetectedKms(nextOdo.toString());
-      }, 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [odoCaptured]);
-
-  // Form Submissions
-  const handleAddDriver = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newDriverName || !newDriverCode) return;
-    
-    // Check if code already exists
-    if (drivers.some(d => d.code.toUpperCase() === newDriverCode.toUpperCase())) {
-      alert("This driver code is already assigned to another driver!");
-      return;
-    }
-
-    try {
-      // Save to Google Sheets
-      const { addDriver } = await import('./utils/googleSheetsApi');
-      const result = await addDriver({
-        name: newDriverName,
-        code: newDriverCode,
-        assignedVehicleId: ''
-      });
-
-      if (result.success) {
-        // Add to local state
-        const newDriver: Driver = result.driver || {
-          id: `drv-${Date.now()}`,
-          name: newDriverName,
-          code: newDriverCode.toUpperCase(),
-          status: 'Active'
-        };
-
-        const newLog: AuditLog = {
-          id: `log-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          event: `New driver registered: ${newDriver.name} under access code: ${newDriver.code}`,
-          user: 'Fleet Operations Owner',
-          type: 'success'
-        };
-
-        const updatedDrivers = [...drivers, newDriver];
-        setDrivers(updatedDrivers);
-        localStorage.setItem('cng_drivers', JSON.stringify(updatedDrivers));
-        
-        setLogs([newLog, ...logs]);
-        
-        setNewDriverName('');
-        setNewDriverCode('');
-        
-        setSuccessMsg('✅ Driver saved to Google Sheets! ' + t.successDriverAdded);
-        setTimeout(() => setSuccessMsg(''), 5000);
-      } else {
-        alert('Failed to save driver: ' + (result.message || 'Unknown error'));
-      }
-    } catch (error) {
-      console.error('Error adding driver:', error);
-      alert('Error saving to Google Sheets. Please check your connection.');
-    }
-  };
-
-  const handleAddVehicle = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newVehiclePlate || !newVehicleModel || !newVehicleInitialOdo) return;
-
-    try {
-      // Save to Google Sheets
-      const { addVehicle } = await import('./utils/googleSheetsApi');
-      const result = await addVehicle({
-        plateNumber: newVehiclePlate,
-        model: newVehicleModel,
-        initialOdo: newVehicleInitialOdo,
-        fuelCapacity: newVehicleCapacity
-      });
-
-      if (result.success) {
-        const initialOdoNum = parseInt(newVehicleInitialOdo) || 0;
-        const newVeh: Vehicle = result.vehicle || {
-          id: `veh-${Date.now()}`,
-          plateNumber: newVehiclePlate.toUpperCase(),
-          model: newVehicleModel,
-          initialOdo: initialOdoNum,
-          currentOdo: initialOdoNum,
-          fuelCapacity: parseInt(newVehicleCapacity) || 12,
-          status: 'Active'
-        };
-
-        const newLog: AuditLog = {
-          id: `log-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          event: `New fleet vehicle added: ${newVeh.plateNumber} (${newVeh.model})`,
-          user: 'Fleet Operations Owner',
-          type: 'success'
-        };
-
-        const updatedVehicles = [...vehicles, newVeh];
-        setVehicles(updatedVehicles);
-        localStorage.setItem('cng_vehicles', JSON.stringify(updatedVehicles));
-        
-        setLogs([newLog, ...logs]);
-        
-        setNewVehiclePlate('');
-        setNewVehicleModel('');
-        setNewVehicleInitialOdo('');
-        
-        setSuccessMsg('✅ Vehicle saved to Google Sheets! ' + t.successVehicleAdded);
-        setTimeout(() => setSuccessMsg(''), 5000);
-      } else {
-        alert('Failed to save vehicle: ' + (result.message || 'Unknown error'));
-      }
-    } catch (error) {
-      console.error('Error adding vehicle:', error);
-      alert('Error saving to Google Sheets. Please check your connection.');
-    }
-  };
-
-  const handleDeleteVehicle = (id: string) => {
-    if (confirm("Are you sure you want to remove this vehicle from the fleet register?")) {
-      const vToDelete = vehicles.find(v => v.id === id);
-      const filtered = vehicles.filter(v => v.id !== id);
-      const newLog: AuditLog = {
-        id: `log-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        event: `Vehicle removed: ${vToDelete?.plateNumber || id}`,
-        user: 'Fleet Operations Owner',
-        type: 'warning'
-      };
-      triggerDataSave(filtered, drivers, fills, [newLog, ...logs]);
-      if (selectedVehicle?.id === id) {
-        setSelectedVehicle(null);
-      }
-    }
-  };
-
-  const handleDeleteDriver = (id: string) => {
-    if (confirm("Are you sure you want to delete this driver?")) {
-      const dToDelete = drivers.find(d => d.id === id);
-      const filtered = drivers.filter(d => d.id !== id);
-      const newLog: AuditLog = {
-        id: `log-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        event: `Driver deleted: ${dToDelete?.name || id}`,
-        user: 'Fleet Operations Owner',
-        type: 'warning'
-      };
-      triggerDataSave(vehicles, filtered, fills, [newLog, ...logs]);
-    }
-  };
-
-  // Authentications
-  const handleDriverLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    console.log('🔐 Attempting driver login with code:', driverCodeInput);
-    
-    // First try to refresh data from Google Sheets
-    await loadAllData();
-    
-    // Now search for the driver
-    const searchCode = driverCodeInput.toUpperCase().trim();
-    console.log('🔍 Searching for driver with code:', searchCode);
-    console.log('📋 Available drivers:', drivers.map(d => d.code));
-    
-    const foundDriver = drivers.find(
-      (d) => d.code.toUpperCase() === searchCode
-    );
-    
-    if (foundDriver) {
-      console.log('✅ Driver found:', foundDriver);
-      setLoggedInDriver(foundDriver);
-      setDriverError('');
-      setPortal('driver');
-      
-      if (foundDriver.assignedVehicleId) {
-        setWizardVehicleId(foundDriver.assignedVehicleId);
-      } else if (vehicles.length > 0) {
-        setWizardVehicleId(vehicles[0].id);
-      }
-    } else {
-      console.log('❌ Driver not found');
-      setDriverError('Invalid access code! Code not found. Please refresh and try again.');
-    }
-  };
-
-  const handleOwnerLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (ownerEmail.toLowerCase() === 'owner@cng.com' && ownerPassword === 'password') {
-      setIsOwnerLoggedIn(true);
-      setOwnerError('');
-      setPortal('owner');
-      setOwnerTab('home');
-      await loadAllData();
-    } else {
-      setOwnerError('Invalid email or password. Use the demo login: owner@cng.com / password');
-    }
-  };
-
-  const handleAdminLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (adminEmail.toLowerCase() === 'admin@cng.com' && adminPassword === 'admin123') {
-      setIsAdminLoggedIn(true);
-      setAdminError('');
-      setPortal('admin');
-      await loadAllData();
-    } else {
-      setAdminError('Invalid administrator password. Use admin@cng.com / admin123');
-    }
-  };
-
-  const handleWizardSubmit = async () => {
-    // Use the vehicle selected by the driver from the dropdown
-    if (!wizardVehicleId || !wizardKgs || !wizardRate) {
-      alert('Please select a vehicle and fill in all required fields!');
-      return;
-    }
-
-    // Find the selected vehicle from the fleet
-    const selectedVeh = vehicles.find(v => v.id === wizardVehicleId);
-    if (!selectedVeh) {
-      alert('Error: Selected vehicle not found in the fleet registry. Please try again.');
-      return;
-    }
-    const vehPlate = selectedVeh.plateNumber;
-    const assignedVehicleId = wizardVehicleId;
-
-    const parsedKgs = parseFloat(wizardKgs) || 0;
-    const parsedRate = parseFloat(wizardRate) || 0;
-    const calculatedTotal = Number((parsedKgs * parsedRate).toFixed(2));
-    const enteredOdo = parseInt(odoDetectedKms) || (selectedVeh ? selectedVeh.currentOdo + 100 : 20000);
-
-    // Geotagging coordinates
-    let receiptLat = 22.3072;
-    let receiptLng = 73.1812;
-    let receiptAddress = `${wizardStation} authorized hub, Vadodara`;
-
-    if (receiptLocationPreset === 'invalid') {
-      receiptLat = 22.3505;
-      receiptLng = 73.1420;
-      receiptAddress = 'Highway Bypass CNG (Simulated Out-of-range)';
-    }
-
-    let odoLat = 22.3074;
-    let odoLng = 73.1815;
-    let odoAddress = 'CNG Station Exit Lane, Vadodara';
-
-    if (simulateOdoOffset) {
-      odoLat = 22.3285;
-      odoLng = 73.1580;
-      odoAddress = 'Driver Private Residence Complex (Gotri Area)';
-    }
-
-    const calculatedDistance = calculateDistanceInMeters(receiptLat, receiptLng, odoLat, odoLng);
-    const locationMismatched = calculatedDistance > 500;
-    const finalFuelDrop = simulateFuelDrop;
-    const dropPct = finalFuelDrop ? 22.5 : 5.0;
-
-    try {
-      setSuccessMsg('📤 Uploading media to Google Drive...');
-      
-      // Import upload utilities
-      const { uploadMediaToDrive, blobToBase64 } = await import('./utils/googleSheetsApi');
-      
-      // Upload video to Drive
-      let videoUrl = '';
-      if (videoBlob) {
-        setSuccessMsg('📤 Uploading video to Drive...');
-        const videoBase64 = await blobToBase64(videoBlob);
-        const videoResult = await uploadMediaToDrive(
-          videoBase64,
-          `CNG_Video_${vehPlate}_${Date.now()}.webm`,
-          'video/webm',
-          'Videos'
-        );
-        videoUrl = videoResult.fileUrl || '';
-        console.log('📹 Video uploaded:', videoUrl);
-      }
-      
-      // Upload pump photo to Drive
-      let pumpPhotoUrl = '';
-      if (pumpPhotoData) {
-        setSuccessMsg('📤 Uploading pump photo to Drive...');
-        const pumpBase64 = pumpPhotoData.split(',')[1];
-        const pumpResult = await uploadMediaToDrive(
-          pumpBase64,
-          `Pump_${vehPlate}_${Date.now()}.jpg`,
-          'image/jpeg',
-          'PumpPhotos'
-        );
-        pumpPhotoUrl = pumpResult.fileUrl || '';
-        console.log('📷 Pump photo uploaded:', pumpPhotoUrl);
-      }
-      
-      // Upload receipt photo to Drive
-      let receiptPhotoUrl = '';
-      if (receiptPhotoData) {
-        setSuccessMsg('📤 Uploading receipt to Drive...');
-        const receiptBase64 = receiptPhotoData.split(',')[1];
-        const receiptResult = await uploadMediaToDrive(
-          receiptBase64,
-          `Receipt_${vehPlate}_${Date.now()}.jpg`,
-          'image/jpeg',
-          'ReceiptPhotos'
-        );
-        receiptPhotoUrl = receiptResult.fileUrl || '';
-        console.log('🧾 Receipt uploaded:', receiptPhotoUrl);
-      }
-      
-      // Upload odometer photo to Drive
-      let odometerPhotoUrl = '';
-      if (odoPhotoData) {
-        setSuccessMsg('📤 Uploading odometer photo to Drive...');
-        const odoBase64 = odoPhotoData.split(',')[1];
-        const odoResult = await uploadMediaToDrive(
-          odoBase64,
-          `Odometer_${vehPlate}_${Date.now()}.jpg`,
-          'image/jpeg',
-          'OdometerPhotos'
-        );
-        odometerPhotoUrl = odoResult.fileUrl || '';
-        console.log('🚗 Odometer uploaded:', odometerPhotoUrl);
-      }
-      
-      setSuccessMsg('💾 Saving fill record to Google Sheets...');
-      
-      // Import addFill
-      const { addFill } = await import('./utils/googleSheetsApi');
-      
-      // Save to Google Sheets with actual Drive URLs
-      const fillResult = await addFill({
-        vehicleId: assignedVehicleId,
-        vehiclePlate: vehPlate,
-        driverId: loggedInDriver?.id || 'unknown',
-        driverName: loggedInDriver?.name || 'Guest Driver',
-        station: wizardStation,
-        kgsFilled: parsedKgs,
-        ratePerKg: parsedRate,
-        totalAmount: calculatedTotal,
-        videoUrl: videoUrl || 'No video captured',
-        pumpPhotoUrl: pumpPhotoUrl || 'No photo captured',
-        receiptPhotoUrl: receiptPhotoUrl || 'No photo captured',
-        receiptLat, receiptLng, receiptAddress,
-        odometerPhotoUrl: odometerPhotoUrl || 'No photo captured',
-        odometerLat: odoLat, odometerLng: odoLng, odometerAddress: odoAddress,
-        odometerValue: enteredOdo,
-        distanceDifferenceMeters: calculatedDistance,
-        isLocationMismatched: locationMismatched,
-        isFuelDropAlert: finalFuelDrop,
-        fuelDropPercentage: dropPct
-      });
-
-      // Update local state with actual media URLs
-      const newCngFill: CngFill = {
-        id: fillResult.fillId || `fill-${Date.now()}`,
-        vehicleId: assignedVehicleId,
-        vehiclePlate: vehPlate,
-        driverId: loggedInDriver?.id || 'unknown',
-        driverName: loggedInDriver?.name || 'Guest Driver',
-        timestamp: new Date().toISOString(),
-        station: wizardStation,
-        kgsFilled: parsedKgs,
-        ratePerKg: parsedRate,
-        totalAmount: calculatedTotal,
-        videoUrl: videoUrl || 'No video captured',
-        pumpPhotoUrl: pumpPhotoUrl || 'No photo captured',
-        receiptPhotoUrl: receiptPhotoUrl || 'No photo captured',
-        receiptGeo: { lat: receiptLat, lng: receiptLng, address: receiptAddress },
-        odometerPhotoUrl: odometerPhotoUrl || 'No photo captured',
-        odometerGeo: { lat: odoLat, lng: odoLng, address: odoAddress },
-        odometerValue: enteredOdo,
-        distanceDifferenceMeters: calculatedDistance,
-        isLocationMismatched: locationMismatched,
-        isFuelDropAlert: finalFuelDrop,
-        fuelDropPercentage: dropPct
-      };
-
-      // Update vehicle odometer locally
-      const updatedVehicles = vehicles.map((v) => {
-        if (v.id === assignedVehicleId) {
-          return { ...v, currentOdo: Math.max(v.currentOdo, enteredOdo) };
-        }
-        return v;
-      });
-
-      // Create local logs
-      const systemLogs: AuditLog[] = [];
-      if (locationMismatched) {
-        systemLogs.push({
-          id: `log-m-${Date.now()}`, timestamp: new Date().toISOString(),
-          event: `🚨 LOCATION MISMATCH: ${loggedInDriver?.name} - ${calculatedDistance}m gap`,
-          user: 'GPS Validator', type: 'critical'
-        });
-      }
-      if (finalFuelDrop) {
-        systemLogs.push({
-          id: `log-f-${Date.now()}`, timestamp: new Date().toISOString(),
-          event: `⚠️ FUEL DROP: ${vehPlate} - ${dropPct}% drop`,
-          user: 'Fuel Monitor', type: 'critical'
-        });
-      }
-      systemLogs.push({
-        id: `log-s-${Date.now()}`, timestamp: new Date().toISOString(),
-        event: `✅ Fill: ${vehPlate} by ${loggedInDriver?.name} (${parsedKgs} KGs)`,
-        user: 'System', type: 'success'
-      });
-
-      // Update local state and localStorage
-      setVehicles(updatedVehicles);
-      setFills([newCngFill, ...fills]);
-      setLogs([...systemLogs, ...logs]);
-      localStorage.setItem('cng_vehicles', JSON.stringify(updatedVehicles));
-      localStorage.setItem('cng_fills', JSON.stringify([newCngFill, ...fills]));
-
-      // Clear wizard state
-      setIsWizardOpen(false);
-      setWizardStep(1);
-      setVideoRecorded(false);
-      setPumpCaptured(false);
-      setReceiptCaptured(false);
-      setOdoCaptured(false);
-      setSimulateOdoOffset(false);
-      setSimulateFuelDrop(false);
-      
-      setSuccessMsg('✅ Fill record saved to Google Sheets! ' + t.fillSubmittedSuccess);
-      setTimeout(() => setSuccessMsg(''), 5000);
-      
-    } catch (error) {
-      console.error('Error saving fill:', error);
-      alert('Error saving to Google Sheets. Data saved locally only.');
-    }
+    setSimulateOdoOffset(false);
+    setSimulateFuelDrop(false);
+    setPumpStream(null);
+    setReceiptStream(null);
+    setOdoStream(null);
   };
 
   // Calculation for automated amount
@@ -1236,8 +887,8 @@ export default function App() {
 
                         {/* Camera Viewport with Live Preview */}
                         <div className="w-full max-w-xs mx-auto aspect-video bg-slate-950 border-2 border-slate-850 rounded-xl overflow-hidden relative flex flex-col items-center justify-center shadow-inner">
-                          {/* Live Video Preview */}
-                          {(isRecording || videoStream) && (
+                          {/* Live Video Preview (shown when camera is active but not yet recorded) */}
+                          {(isRecording || (videoPreviewMode && !videoRecorded) || videoStream) && !videoRecorded && (
                             <video
                               ref={videoPreviewRef}
                               autoPlay
@@ -1288,10 +939,10 @@ export default function App() {
                           )}
                           
                           {/* Camera Not Started */}
-                          {!isRecording && !videoRecorded && !videoStream && (
+                          {!videoPreviewMode && !isRecording && !videoRecorded && (
                             <div className="text-center text-slate-500 relative p-4">
                               <Video className="h-10 w-10 mx-auto mb-2 opacity-50 text-emerald-400" />
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tap to Start Camera</p>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tap to Open Camera</p>
                               <p className="text-[9px] text-slate-500 mt-1">Live preview will appear here</p>
                             </div>
                           )}
@@ -1305,7 +956,37 @@ export default function App() {
 
                         {/* Recording Controls */}
                         <div className="pt-2">
-                          {!isRecording && !videoRecorded && (
+                          {!videoPreviewMode && !isRecording && !videoRecorded && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setCameraError('');
+                                try {
+                                  const stream = await navigator.mediaDevices.getUserMedia({
+                                    video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+                                    audio: true
+                                  });
+                                  setVideoStream(stream);
+                                  setVideoPreviewMode(true);
+                                  if (videoPreviewRef.current) {
+                                    videoPreviewRef.current.srcObject = stream;
+                                    setTimeout(() => {
+                                      if (videoPreviewRef.current) {
+                                        videoPreviewRef.current.play().catch(err => console.log('Auto-play error:', err));
+                                      }
+                                    }, 100);
+                                  }
+                                } catch (error: any) {
+                                  setCameraError(error.message || 'Failed to open camera');
+                                }
+                              }}
+                              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg px-5 py-3 transition-all shadow-md inline-flex items-center gap-1.5"
+                            >
+                              <Video className="h-4 w-4" />
+                              Open Camera
+                            </button>
+                          )}
+                          {videoPreviewMode && !isRecording && !videoRecorded && (
                             <button
                               type="button"
                               onClick={async () => {
@@ -1314,25 +995,26 @@ export default function App() {
                                 if (result.success) {
                                   setIsRecording(true);
                                   setRecordingSecs(0);
-                                  // Get stream for preview
+                                  setVideoPreviewMode(false);
+                                  // Switch preview to recorder's stream
                                   const stream = recorderInstance.getStream();
                                   if (stream && videoPreviewRef.current) {
                                     setVideoStream(stream);
                                     videoPreviewRef.current.srcObject = stream;
                                     setTimeout(() => {
                                       if (videoPreviewRef.current) {
-                                        videoPreviewRef.current.play().catch(err => console.log('Auto-play error:', err));
+                                        videoPreviewRef.current.play().catch(err => console.log('Play error:', err));
                                       }
                                     }, 100);
                                   }
                                 } else {
-                                  setCameraError(result.error || 'Failed to start camera');
+                                  setCameraError(result.error || 'Failed to start recording');
                                 }
                               }}
                               className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-lg px-5 py-3 transition-all shadow-md inline-flex items-center gap-1.5"
                             >
-                              <Video className="h-4 w-4" />
-                              Start Camera & Record
+                              <span className="w-2.5 h-2.5 bg-white rounded-full inline-block"></span>
+                              Start Recording
                             </button>
                           )}
                           {isRecording && (
@@ -1562,6 +1244,21 @@ export default function App() {
 
                         {/* Camera Viewport for Receipt */}
                         <div className="w-full max-w-xs mx-auto aspect-video bg-slate-950 border-2 border-slate-850 rounded-xl overflow-hidden relative flex flex-col items-center justify-center shadow-inner">
+                          {/* Live Camera Preview */}
+                          {!receiptCaptured && receiptStream && (
+                            <video
+                              ref={receiptPreviewRef}
+                              autoPlay
+                              playsInline
+                              muted
+                              className="absolute inset-0 w-full h-full object-cover"
+                              onLoadedMetadata={(e) => {
+                                const video = e.target as HTMLVideoElement;
+                                video.play().catch(err => console.log('Play error:', err));
+                              }}
+                            />
+                          )}
+                          
                           {receiptCaptured && receiptPhotoData ? (
                             <div className="w-full h-full relative">
                               <img
@@ -1581,20 +1278,54 @@ export default function App() {
                           ) : isCapturing ? (
                             <div className="text-center">
                               <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                              <p className="text-[10px] text-emerald-400">Opening camera & getting GPS...</p>
+                              <p className="text-[10px] text-emerald-400">Opening camera...</p>
                             </div>
-                          ) : (
+                          ) : !receiptStream ? (
                             <div className="text-center text-slate-500 p-4">
                               <MapPin className="h-10 w-10 mx-auto mb-2 opacity-50 text-emerald-400" />
-                              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Tap to Capture Receipt</p>
-                              <p className="text-[9px] text-slate-600 mt-1">GPS location will be recorded automatically</p>
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Open Camera to Capture Receipt</p>
+                              <p className="text-[9px] text-slate-600 mt-1">Live preview will appear before capture</p>
+                            </div>
+                          ) : null}
+
+                          {/* Capture Overlay when preview is active */}
+                          {!receiptCaptured && receiptStream && (
+                            <div className="absolute inset-0 bg-black/20 flex items-center justify-center z-10">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setCameraError('');
+                                  // Get GPS first
+                                  const loc = await getCurrentLocation();
+                                  if (receiptLocationPreset === 'invalid') {
+                                    setReceiptLocation({ lat: 22.3505, lng: 73.1420 });
+                                  } else {
+                                    setReceiptLocation({ lat: loc.lat, lng: loc.lng });
+                                  }
+                                  // Capture photo
+                                  const result = await capturePhoto();
+                                  if (result.success && result.dataUrl) {
+                                    setReceiptPhotoData(result.dataUrl);
+                                    setReceiptCaptured(true);
+                                    // Stop stream
+                                    if (receiptStream) {
+                                      receiptStream.getTracks().forEach(track => track.stop());
+                                    }
+                                    setReceiptStream(null);
+                                    if (receiptPreviewRef.current) {
+                                      receiptPreviewRef.current.srcObject = null;
+                                    }
+                                  } else {
+                                    setCameraError(result.error || 'Failed to capture photo');
+                                  }
+                                }}
+                                className="w-16 h-16 bg-white rounded-full border-4 border-emerald-500 flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
+                              >
+                                <div className="w-12 h-12 bg-emerald-500 rounded-full"></div>
+                              </button>
                             </div>
                           )}
-                          {cameraError && (
-                            <div className="absolute bottom-2 left-2 right-2 bg-rose-950/90 p-2 rounded text-[9px] text-rose-400">
-                              {cameraError}
-                            </div>
-                          )}
+
                         </div>
 
                         {/* GPS Location Display */}
@@ -1635,44 +1366,44 @@ export default function App() {
                         </div>
 
                         <div className="pt-1 flex flex-col items-center gap-2">
-                          {!receiptCaptured ? (
+                          {!receiptCaptured && !receiptStream ? (
                             <button
                               type="button"
                               onClick={async () => {
                                 setCameraError('');
                                 setIsCapturing(true);
-                                
-                                // Get GPS first
-                                const loc = await getCurrentLocation();
-                                if (receiptLocationPreset === 'invalid') {
-                                  setReceiptLocation({ lat: 22.3505, lng: 73.1420 }); // Simulated mismatch
-                                } else {
-                                  setReceiptLocation({ lat: loc.lat, lng: loc.lng });
+                                try {
+                                  const stream = await navigator.mediaDevices.getUserMedia({
+                                    video: { facingMode: 'environment', width: { ideal: 1920 } },
+                                    audio: false
+                                  });
+                                  setReceiptStream(stream);
+                                  if (receiptPreviewRef.current) {
+                                    receiptPreviewRef.current.srcObject = stream;
+                                    setTimeout(() => {
+                                      if (receiptPreviewRef.current) {
+                                        receiptPreviewRef.current.play().catch(err => console.log('Play error:', err));
+                                      }
+                                    }, 100);
+                                  }
+                                } catch (error: any) {
+                                  setCameraError(error.message || 'Failed to open camera');
                                 }
-                                
-                                // Then capture photo
-                                const result = await capturePhoto();
                                 setIsCapturing(false);
-                                
-                                if (result.success && result.dataUrl) {
-                                  setReceiptPhotoData(result.dataUrl);
-                                  setReceiptCaptured(true);
-                                } else {
-                                  setCameraError(result.error || 'Failed to capture photo');
-                                }
                               }}
                               className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg px-5 py-3 transition-all shadow-md inline-flex items-center gap-1.5"
                             >
-                              <MapPin className="h-4 w-4" />
-                              Capture Receipt + GPS Location
+                              <Camera className="h-4 w-4" />
+                              Open Camera
                             </button>
-                          ) : (
+                          ) : receiptCaptured ? (
                             <div className="flex gap-2">
                               <button
                                 type="button"
                                 onClick={() => {
                                   setReceiptCaptured(false);
                                   setReceiptPhotoData('');
+                                  setReceiptStream(null);
                                 }}
                                 className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-lg px-4 py-2 border border-slate-700"
                               >
@@ -1680,7 +1411,23 @@ export default function App() {
                               </button>
                               <span className="text-xs text-emerald-400 font-bold self-center">✓ Receipt & GPS Ready!</span>
                             </div>
-                          )}
+                          ) : receiptStream ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (receiptStream) {
+                                  receiptStream.getTracks().forEach(track => track.stop());
+                                }
+                                setReceiptStream(null);
+                                if (receiptPreviewRef.current) {
+                                  receiptPreviewRef.current.srcObject = null;
+                                }
+                              }}
+                              className="bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded-lg px-5 py-3 transition-all inline-flex items-center gap-1.5"
+                            >
+                              Close Camera
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                     )}
